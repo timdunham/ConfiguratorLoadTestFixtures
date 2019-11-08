@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Description>Fixtures for testing CPQ Configurator</Description>
     <AssemblyTitle>Infor.CPQ.ConfiguratorLoadTestFixtures</AssemblyTitle>
-    <Version>0.0.5</Version>
+    <Version>0.0.7</Version>
     <Authors>Tim Dunham</Authors>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <WarningsAsErrors>true</WarningsAsErrors>
@@ -19,6 +19,7 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Infor.CPQ.Security.OAuth.Client" Version="2019.7.25.3" />
     <PackageReference Include="Zoxive.HttpLoadTesting.Client" Version="0.0.29" />
   </ItemGroup>
   <ItemGroup>
