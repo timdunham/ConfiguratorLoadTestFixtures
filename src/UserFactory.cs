@@ -12,7 +12,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
     {
         public static HttpUser CreateUser(string configuratorUrl, string key, string secret, string tenant, IReadOnlyList<ILoadTest> tests)
         {
-            return new HttpUser("https://cfgax3.cpq.awsdev.infor.com/", tests)
+            return new HttpUser(configuratorUrl, tests)
                 {
                     AlterHttpClient = SetHttpClientProperties,
                     CreateHttpMessageHandler = SetHttpClientHandlerProperties,
