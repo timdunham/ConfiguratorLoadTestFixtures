@@ -48,6 +48,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
                     SupportVersionValidation = true
                 });
                 request.Headers.Add("X-Infor-TenantId", tenant);
+                request.Headers.Add("X-TenantId", tenant);
                 request.Headers.Add("Tenant", tenant);
                 if (request.RequestUri.AbsoluteUri.Contains("DataImport"))
                 {
