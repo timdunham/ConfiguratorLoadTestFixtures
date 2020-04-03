@@ -21,17 +21,16 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         internal List<string> _integrationParameters = new List<string>();
         internal List<string> _rapidOptions = new List<string>();
         private string _baseUrl {get;}
+        private string _headerId {get;}
         internal virtual string StartConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/StartConfiguration";
         internal virtual string ConfigureUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/Configure";
         internal virtual string FinalizeConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/FinalizeConfiguration";
         internal virtual string FinishInteractiveUrl => _baseUrl + "/ProductConfigurator.svc/json/FinishInteractiveConfiguration";
         internal virtual string DeleteConfigurationUrl => _baseUrl + "/ProductConfigurator.svc/json/DeleteConfiguration";
         internal virtual string CancelConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/CancelConfiguration";
-
-        internal virtual string HeaderId => "ConfigurationFixture";
         internal virtual string SessionIdCaption => "sessionID";
 
-        public Configuration(IUserLoadTestHttpClient userLoadTestHttpClient, string baseUrl, string tenant, string rulesetNamespace, string ruleset)
+        public Configuration(IUserLoadTestHttpClient userLoadTestHttpClient, string baseUrl, string tenant, string rulesetNamespace, string ruleset, string headerId)
         {
             _userLoadTestHttpClient = userLoadTestHttpClient;
             _baseUrl = baseUrl;
@@ -39,6 +38,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             _rulesetNamespace = rulesetNamespace;
             _ruleset = ruleset;
             _configurationId = Guid.NewGuid();
+            _headerId = headerId;
         }
         public Configuration WithIntegrationParameter(string name, string value, string dataType)
         {
@@ -123,7 +123,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
                 ""Part"": {{ ""Namespace"": ""{_rulesetNamespace}"", ""Name"": ""{_ruleset}""}},
                 ""Mode"": 0,
                 ""Profile"": ""default"",
-                ""HeaderDetail"" : {{ ""HeaderId"": ""{HeaderId}"", ""DetailId"": ""{_configurationId}"" }},
+                ""HeaderDetail"" : {{ ""HeaderId"": ""{_headerId}"", ""DetailId"": ""{_configurationId}"" }},
                 ""SourceHeaderDetail"" : {{ ""HeaderId"": """", ""DetailId"": """" }},
                 ""VariantKey"" : null,
                 ""IntegrationParameters"" : [{string.Join(',', _integrationParameters)}],
@@ -169,7 +169,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         {
             var applicationHeaderDetail = $@"{{ 
                 ""application"": {{ ""Instance"": ""{_tenant}"",""Name"": ""{_tenant}"",""User"": ""test"" }},
-                ""headerDetail"" : {{ ""HeaderId"": ""{HeaderId}"", ""DetailId"": ""{_configurationId}"" }}
+                ""headerDetail"" : {{ ""HeaderId"": ""{_headerId}"", ""DetailId"": ""{_configurationId}"" }}
             }} ";
             return new StringContent(applicationHeaderDetail, Encoding.UTF8, "application/json");
         }
