@@ -17,27 +17,39 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         internal readonly string _rulesetNamespace;
         internal readonly string _ruleset;
         internal JToken _ui;
+        internal Guid _configurationId;
         internal List<string> _integrationParameters = new List<string>();
-        internal abstract string StartConfigurationUrl {get;}
-        internal abstract string ConfigureUrl {get;}
-        internal abstract string FinalizeConfigurationUrl {get;}
-        internal abstract string CancelConfigurationUrl {get;}
-        internal abstract string SessionIdCaption {get;}
-        internal abstract HttpContent GetSessionId();
-        internal abstract HttpContent GetInputParameters();
+        internal List<string> _rapidOptions = new List<string>();
+        private string _baseUrl {get;}
+        internal virtual string StartConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/StartConfiguration";
+        internal virtual string ConfigureUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/Configure";
+        internal virtual string FinalizeConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/FinalizeConfiguration";
+        internal virtual string FinishInteractiveUrl => _baseUrl + "/ProductConfigurator.svc/json/FinishInteractiveConfiguration";
+        internal virtual string DeleteConfigurationUrl => _baseUrl + "/ProductConfigurator.svc/json/DeleteConfiguration";
+        internal virtual string CancelConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/CancelConfiguration";
 
-        public Configuration(IUserLoadTestHttpClient userLoadTestHttpClient, string tenant, string rulesetNamespace, string ruleset)
+        internal virtual string HeaderId => "ConfigurationFixture";
+        internal virtual string SessionIdCaption => "sessionID";
+
+        public Configuration(IUserLoadTestHttpClient userLoadTestHttpClient, string baseUrl, string tenant, string rulesetNamespace, string ruleset)
         {
             _userLoadTestHttpClient = userLoadTestHttpClient;
+            _baseUrl = baseUrl;
             _tenant = tenant;
             _rulesetNamespace = rulesetNamespace;
             _ruleset = ruleset;
+            _configurationId = Guid.NewGuid();
         }
         public Configuration WithIntegrationParameter(string name, string value, string dataType)
         {
             var dataTypeNumber = (dataType=="number")? 1 : (dataType=="boolean") ? 2 : 0;
                 
             _integrationParameters.Add($"{{ \"Name\": \"{name}\", \"SimpleValue\": \"{value}\", \"IsNull\": false, \"Type\": \"{dataTypeNumber}\" }}"); //isNull vs IsNull?
+            return this;
+        }
+        public Configuration WithRapidOption(string name, string valueExpression)
+        {
+            _rapidOptions.Add($"{{ \"VariableName\":\"{name}\", \"ValueExpression\":\"{valueExpression}\" }}");
             return this;
         }
         public async Task<Configuration> StartAsync()
@@ -49,7 +61,8 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
 
         public async Task<Configuration> ConfigureAsync(string caption, string value, string stepName)
         {
-            _ui = (await _userLoadTestHttpClient.Post(ConfigureUrl, ChangeOption(caption, value))).AsJson();
+            var result = await _userLoadTestHttpClient.Post(ConfigureUrl, ChangeOption(caption, value));
+            _ui = result.AsJson();
             return this;
         }
         
@@ -72,7 +85,17 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             var result = await _userLoadTestHttpClient.Post(FinalizeConfigurationUrl, GetSessionId());
             return this;
         }
+        public async Task<Configuration> FinishInteractive()
+        {
+            var result = await _userLoadTestHttpClient.Post(FinishInteractiveUrl, GetApplicationAndHeaderDetail());
+            return this;
+        }
 
+        public async Task<Configuration> Delete()
+        {
+            var result = await _userLoadTestHttpClient.Post(DeleteConfigurationUrl, GetApplicationAndHeaderDetail());
+            return this;
+        }
         public async Task<Configuration> Cancel()
         {
             var result = await _userLoadTestHttpClient.Post(CancelConfigurationUrl, GetSessionId());
@@ -93,6 +116,27 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             return selectableValues[index];
         }
 
+        internal virtual HttpContent GetInputParameters()
+        {
+            var inputParams = $@"{{ ""inputParameters"" : {{
+                ""Application"": {{ ""Instance"": ""{_tenant}"",""Name"": ""{_tenant}"",""User"": ""test"" }},
+                ""Part"": {{ ""Namespace"": ""{_rulesetNamespace}"", ""Name"": ""{_ruleset}""}},
+                ""Mode"": 0,
+                ""Profile"": ""default"",
+                ""HeaderDetail"" : {{ ""HeaderId"": ""{HeaderId}"", ""DetailId"": ""{_configurationId}"" }},
+                ""SourceHeaderDetail"" : {{ ""HeaderId"": """", ""DetailId"": """" }},
+                ""VariantKey"" : null,
+                ""IntegrationParameters"" : [{string.Join(',', _integrationParameters)}],
+                ""RapidOptions"" : [ {string.Join(',', _rapidOptions)} ]
+            }} }}";
+            return new StringContent( inputParams, Encoding.UTF8, "application/json");        
+        }
+
+        internal virtual HttpContent GetSessionId()
+        {
+            return new StringContent($@"{{ ""{SessionIdCaption}"": ""{SessionId()}"" }}", Encoding.UTF8, "application/json");
+        }
+
         private JToken FindScreen(string screenOptionCaption)
         {
             var screen = _ui.SelectToken($"$...ScreenOptions[?(@.Caption=='{screenOptionCaption}')]");
@@ -109,6 +153,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         internal virtual HttpContent ChangeOption(string screenOptionCaption, string value)
         {
             var screenId = FindScreenId(screenOptionCaption);
+            //return ConfigureBody($"{{ \"ID\": \"\",\"Value\": \"{value}\" }}");
             return ConfigureBody($"{{ \"ID\": \"{screenId}\",\"Value\": \"{value}\" }}");
         }
 
@@ -120,6 +165,14 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
                 }}", Encoding.UTF8, "application/json");
         }
 
+        internal virtual HttpContent GetApplicationAndHeaderDetail()
+        {
+            var applicationHeaderDetail = $@"{{ 
+                ""application"": {{ ""Instance"": ""{_tenant}"",""Name"": ""{_tenant}"",""User"": ""test"" }},
+                ""headerDetail"" : {{ ""HeaderId"": ""{HeaderId}"", ""DetailId"": ""{_configurationId}"" }}
+            }} ";
+            return new StringContent(applicationHeaderDetail, Encoding.UTF8, "application/json");
+        }
 
     }
 }

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Description>Fixtures for testing CPQ Configurator</Description>
     <AssemblyTitle>Infor.CPQ.ConfiguratorLoadTestFixtures</AssemblyTitle>
-    <Version>0.0.8</Version>
+    <Version>0.0.10</Version>
     <Authors>Tim Dunham</Authors>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <WarningsAsErrors>true</WarningsAsErrors>

@@ -19,9 +19,10 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
                     AlterHttpRequestMessage = SetHttpRequestHeaders(key, secret, tenant)
                 };
         }
+        
         private static void SetHttpClientProperties(HttpClient httpClient)
         {
-            httpClient.Timeout = new TimeSpan(0, 1, 0);
+            httpClient.Timeout = new TimeSpan(0, 10, 0);
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             httpClient.DefaultRequestHeaders.ExpectContinue = false;
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
@@ -48,7 +49,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
                     SupportVersionValidation = true
                 });
                 request.Headers.Add("X-Infor-TenantId", tenant);
-                request.Headers.Add("X-TenantId", tenant);
+                //request.Headers.Add("X-TenantId", tenant);
                 request.Headers.Add("Tenant", tenant);
                 if (request.RequestUri.AbsoluteUri.Contains("DataImport"))
                 {
