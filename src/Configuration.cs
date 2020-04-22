@@ -20,8 +20,10 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         internal Guid _configurationId;
         internal List<string> _integrationParameters = new List<string>();
         internal List<string> _rapidOptions = new List<string>();
-        private string _baseUrl {get;}
-        private string _headerId {get;}
+        private string _baseUrl { get; }
+        private string _headerId { get; }
+        private string _profile { get; set; }
+        private int _delayInSeconds;
         internal virtual string StartConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/StartConfiguration";
         internal virtual string ConfigureUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/Configure";
         internal virtual string FinalizeConfigurationUrl => _baseUrl + "/ProductConfiguratorUI.svc/json/FinalizeConfiguration";
@@ -39,11 +41,13 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             _ruleset = ruleset;
             _configurationId = Guid.NewGuid();
             _headerId = headerId;
+            _profile = "default";
+            _delayInSeconds = 0;
         }
         public Configuration WithIntegrationParameter(string name, string value, string dataType)
         {
-            var dataTypeNumber = (dataType=="number")? 1 : (dataType=="boolean") ? 2 : 0;
-                
+            var dataTypeNumber = (dataType == "number") ? 1 : (dataType == "boolean") ? 2 : 0;
+
             _integrationParameters.Add($"{{ \"Name\": \"{name}\", \"SimpleValue\": \"{value}\", \"IsNull\": false, \"Type\": \"{dataTypeNumber}\" }}"); //isNull vs IsNull?
             return this;
         }
@@ -52,42 +56,52 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             _rapidOptions.Add($"{{ \"VariableName\":\"{name}\", \"ValueExpression\":\"{valueExpression}\" }}");
             return this;
         }
+        public Configuration WithProfile(string profile)
+        {
+            _profile = profile;
+            return this;
+        }
         public async Task<Configuration> StartAsync()
         {
-            var result =(await _userLoadTestHttpClient.Post(StartConfigurationUrl, GetInputParameters(), null));
+            var result = (await _userLoadTestHttpClient.Post(StartConfigurationUrl, GetInputParameters(), null));
             _ui = result.AsJson();
+            await DelayIfNeeded();
             return this;
         }
 
         public async Task<Configuration> ConfigureAsync(string caption, string value, string stepName)
         {
             var result = await _userLoadTestHttpClient.Post(ConfigureUrl, ChangeOption(caption, value));
-            _ui = result.AsJson();
+            await UpdateUIAndDelay(result);
             return this;
         }
-        
+
         public async Task<Configuration> ConfigureWithRandomOptionAsync(string caption, string[] withoutValues, string stepName)
         {
             var value = FindRandomScreenValue(caption, withoutValues);
             Console.Write($"{value}-");
-            _ui = (await _userLoadTestHttpClient.Post(ConfigureUrl, ChangeOption(caption, value))).AsJson();
+            var response = await _userLoadTestHttpClient.Post(ConfigureUrl, ChangeOption(caption, value));
+            await UpdateUIAndDelay(response);
             return this;
         }
-        
+
         public async Task<Configuration> Continue()
         {
-            _ui = (await _userLoadTestHttpClient.Post(ConfigureUrl, ConfigureBody(""))).AsJson();
+            var response = await _userLoadTestHttpClient.Post(ConfigureUrl, ConfigureBody(""));
+            await UpdateUIAndDelay(response);
             return this;
         }
-        
+
         public async Task<Configuration> Finalize()
         {
             var result = await _userLoadTestHttpClient.Post(FinalizeConfigurationUrl, GetSessionId());
+            await DelayIfNeeded();
             return this;
         }
         public async Task<Configuration> FinishInteractive()
         {
             var result = await _userLoadTestHttpClient.Post(FinishInteractiveUrl, GetApplicationAndHeaderDetail());
+            await DelayIfNeeded();
             return this;
         }
 
@@ -101,7 +115,11 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             var result = await _userLoadTestHttpClient.Post(CancelConfigurationUrl, GetSessionId());
             return this;
         }
-
+        public Configuration WithUserDelay(int delayInSeconds)
+        {
+            _delayInSeconds = delayInSeconds;
+            return this;
+        }
         internal virtual string FindScreenId(string screenOptionCaption)
         {
             var screen = FindScreen(screenOptionCaption);
@@ -111,7 +129,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         internal virtual string FindRandomScreenValue(string screenOptionCaption, IEnumerable<string> withoutValues)
         {
             var screen = FindScreen(screenOptionCaption);
-            var selectableValues = screen.SelectToken("SelectableValues").Select(x=>x.Value<string>("Value")).Except(withoutValues).ToArray();
+            var selectableValues = screen.SelectToken("SelectableValues").Select(x => x.Value<string>("Value")).Except(withoutValues).ToArray();
             var index = new Random().Next(selectableValues.Length);
             return selectableValues[index];
         }
@@ -122,14 +140,14 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
                 ""Application"": {{ ""Instance"": ""{_tenant}"",""Name"": ""{_tenant}"",""User"": ""test"" }},
                 ""Part"": {{ ""Namespace"": ""{_rulesetNamespace}"", ""Name"": ""{_ruleset}""}},
                 ""Mode"": 0,
-                ""Profile"": ""default"",
+                ""Profile"": ""{_profile}"",
                 ""HeaderDetail"" : {{ ""HeaderId"": ""{_headerId}"", ""DetailId"": ""{_configurationId}"" }},
                 ""SourceHeaderDetail"" : {{ ""HeaderId"": """", ""DetailId"": """" }},
                 ""VariantKey"" : null,
                 ""IntegrationParameters"" : [{string.Join(',', _integrationParameters)}],
                 ""RapidOptions"" : [ {string.Join(',', _rapidOptions)} ]
             }} }}";
-            return new StringContent( inputParams, Encoding.UTF8, "application/json");        
+            return new StringContent(inputParams, Encoding.UTF8, "application/json");
         }
 
         internal virtual HttpContent GetSessionId()
@@ -140,7 +158,7 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
         private JToken FindScreen(string screenOptionCaption)
         {
             var screen = _ui.SelectToken($"$...ScreenOptions[?(@.Caption=='{screenOptionCaption}')]");
-            if (screen==null)
+            if (screen == null)
                 throw new ApplicationException($"Unable to find page {screenOptionCaption}");
             return screen;
         }
@@ -173,6 +191,18 @@ namespace Infor.CPQ.ConfiguratorLoadTestFixtures
             }} ";
             return new StringContent(applicationHeaderDetail, Encoding.UTF8, "application/json");
         }
+        private async Task UpdateUIAndDelay(HttpResponseMessage response)
+        {
+            _ui = response.AsJson(); //todo: error handling if it's not UIData
+            await DelayIfNeeded();
+        }
 
+        private async Task DelayIfNeeded()
+        {
+            if (_delayInSeconds > 0)
+            {
+                await _userLoadTestHttpClient.LogUserDelay(async () => await Task.Delay(_delayInSeconds * 1000));
+            }
+        }
     }
 }
